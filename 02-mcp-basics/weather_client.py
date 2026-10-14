@@ -16,13 +16,22 @@ Cách chạy (cùng thư mục với weather_server.py, client tự khởi độ
 import asyncio
 import sys
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
 async def main() -> None:
-    # Dùng đúng interpreter đang chạy client (tránh lỗi "python" không tồn tại)
-    params = StdioServerParameters(command=sys.executable, args=["weather_server.py"])
+    # Dùng đúng interpreter và script path để chạy được từ bất kỳ thư mục nào
+    server_script = str((Path(__file__).parent / "weather_server.py").resolve())
+    params = StdioServerParameters(command=sys.executable, args=[server_script])
 
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -39,6 +48,22 @@ async def main() -> None:
                 result = await session.call_tool("get_weather", {"city": city})
                 print(f"\ncall_tool get_weather(city={city!r}):")
                 print("  ->", result.content[0].text)
+
+            # 3. Gọi tool get_forecast
+            print("\n" + "=" * 40)
+            print("Gọi tool get_forecast:")
+            tool_names = [t.name for t in tools.tools]
+            if "get_forecast" in tool_names:
+                for city in ["Hanoi", "Danang", "Haiphong"]:
+                    try:
+                        result = await session.call_tool("get_forecast", {"city": city})
+                        print(f"\ncall_tool get_forecast(city={city!r}):")
+                        print("  ->", result.content[0].text)
+                    except Exception as e:
+                        print(f"\ncall_tool get_forecast(city={city!r}) lỗi: {e}")
+            else:
+                print("⚠️  Chưa tìm thấy tool 'get_forecast' trên server.")
+                print("   (Nếu bạn đã viết get_forecast trong weather_server.py, hãy nhớ nhấn Ctrl+S để lưu file!)")
 
 
 if __name__ == "__main__":

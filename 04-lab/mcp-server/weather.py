@@ -2,7 +2,44 @@ from typing import Any
 import asyncio
 import httpx
 import os
-from mcp.server.fastmcp import FastMCP
+import sys
+from pathlib import Path
+try:
+    from mcp.server.mcpserver import MCPServer
+    class FastMCP(MCPServer):
+        def __init__(self, name: str, host: str = "0.0.0.0", port: int = 8085, **kwargs):
+            super().__init__(name, **kwargs)
+            self._default_host = host
+            self._default_port = port
+        def run(self, transport: str = "stdio", **kwargs):
+            if transport == "streamable-http":
+                kwargs.setdefault("host", self._default_host)
+                kwargs.setdefault("port", self._default_port)
+            return super().run(transport=transport, **kwargs)
+except ImportError:
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ImportError:
+        from fastmcp import FastMCP
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+# Tự động nạp biến môi trường từ .env
+for _env_file in [Path(__file__).parent / ".env", Path(__file__).parent.parent.parent / ".env"]:
+    if _env_file.exists():
+        with open(_env_file, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    _k, _v = _k.strip(), _v.strip().strip("\"'")
+                    if _k and _k not in os.environ:
+                        os.environ[_k] = _v
 
 # Initialize FastMCP server
 port = int(os.getenv("PORT", 8085))
@@ -141,12 +178,9 @@ print("🔧 Available tools: get_current_weather, get_forecast, health_check")
 if __name__ == "__main__":
     import sys
     
-    is_cloud_run = bool(os.getenv("PORT"))
-    is_standalone = len(sys.argv) == 1 and sys.stdin.isatty()
-    
-    if is_cloud_run or is_standalone:
-        print(f"🚀 Starting MCP server on http://0.0.0.0:{port}/mcp")
-        mcp.run(transport="streamable-http")
-    else:
+    if "--stdio" in sys.argv:
         print("Starting FastMCP server in stdio mode for local client", file=sys.stderr)
         mcp.run()
+    else:
+        print(f"🚀 Starting MCP server on http://0.0.0.0:{port}/mcp")
+        mcp.run(transport="streamable-http")

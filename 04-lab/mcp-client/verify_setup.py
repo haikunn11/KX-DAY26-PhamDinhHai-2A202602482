@@ -7,11 +7,24 @@ import os
 import sys
 from pathlib import Path
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+CLIENT_DIR = Path(__file__).parent
+if str(CLIENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CLIENT_DIR))
+
 def check_environment():
     """Check if .env file exists and is configured"""
     print("🔍 Checking environment configuration...")
     
-    env_file = Path(".env")
+    env_file = CLIENT_DIR / ".env"
+    if not env_file.exists():
+        env_file = Path(".env")
     if not env_file.exists():
         print("❌ .env file not found")
         print("   Run: echo 'GOOGLE_API_KEY=your_key' > .env")
@@ -19,6 +32,7 @@ def check_environment():
     
     # Check if GOOGLE_API_KEY is set
     from dotenv import load_dotenv
+    load_dotenv(env_file)
     load_dotenv()
     
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -46,7 +60,13 @@ def check_dependencies():
     all_installed = True
     for package, name in required_packages:
         try:
-            __import__(package)
+            if package == "google.generativeai":
+                try:
+                    __import__("google.genai")
+                except ImportError:
+                    __import__("google.generativeai")
+            else:
+                __import__(package)
             print(f"✅ {name}")
         except ImportError:
             print(f"❌ {name} not installed")
@@ -69,7 +89,7 @@ def check_agent_structure():
     
     all_exist = True
     for file_path in required_files:
-        path = Path(file_path)
+        path = CLIENT_DIR / file_path
         if path.exists():
             print(f"✅ {file_path}")
         else:
